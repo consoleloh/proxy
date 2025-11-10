@@ -1,32 +1,52 @@
-export default async function handler(req, res) {
-  // 🔑 УСТАНОВИТЬ CORS ЗАГОЛОВКИ ДЛЯ ВСЕХ ОТВЕТОВ
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export const config = {
+  runtime: 'edge'
+};
 
-  // Обработка preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+export default async function handler(request) {
+  // CORS headers для всех ответов
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
+
+  // Обработка OPTIONS
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Только POST2-запросы разрешены' });
+  if (request.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Только POST-запросы разрешены' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
-    const body = await req.text();
-    const googleRes = await fetch('https://script.google.com/macros/s/AKfycbyUmk8zcO3cy8SY75dA7erz73-7nll-dO0mvoCvu_LXn3VMoRXsZtCRc55m6nfOwQZT/exec', {
+    // ✅ Правильный способ для Edge: await request.text()
+    const body = await request.text();
+
+    const googleResponse = await fetch('https://script.google.com/macros/s/AKfycbyUmk8zcO3cy8SY75dA7erz73-7nll-dO0mvoCvu_LXn3VMoRXsZtCRc55m6nfOwQZT/exec', {
       method: 'POST',
       headers: {
-        'Content-Type': req.headers['content-type'] || 'application/json'
+        'Content-Type': request.headers.get('Content-Type') || 'application/json'
       },
       body: body
     });
 
-    const text = await googleRes.text();
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.status(googleRes.status).send(text);
-  } catch (e) {
-    res.status(500).json({ error: 'Proxy error', message: e.message });
+    const googleText = await googleResponse.text();
+    return new Response(googleText, {
+      status: googleResponse.status,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    });
+
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: 'Proxy error', message: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 }
