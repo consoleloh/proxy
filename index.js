@@ -1,61 +1,23 @@
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyUmk8zcO3cy8SY75dA7erz73-7nll-dO0mvoCvu_LXn3VMoRXsZtCRc55m6nfOwQZT/exec';
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Только POST' });
+  }
 
-export default {
-  async fetch(request) {
-    const { method } = request;
+  try {
+    const body = await req.text(); // важно: не json(), чтобы не ломать base64
+    const googleRes = await fetch('https://script.google.com/macros/s/AKfycbyUmk8zcO3cy8SY75dA7erz73-7nll-dO0mvoCvu_LXn3VMoRXsZtCRc55m6nfOwQZT/exec', {
+      method: 'POST',
+      headers: {
+        'Content-Type': req.headers['content-type'] || 'application/json'
+      },
+      body: body
+    });
 
-    // Обработка GET (для проверки)
-    if (method === 'GET') {
-      return new Response('Метод не разрешён. Используйте POST.', { status: 405 });
-    }
-
-    // CORS preflight
-    if (method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        },
-      });
-    }
-
-    // Только POST
-    if (method !== 'POST') {
-      return new Response('Метод не поддерживается', { status: 405 });
-    }
-
-    try {
-      // 🔑 Ключевое: читаем тело как текст
-      const body = await request.text();
-      const contentType = request.headers.get('Content-Type') || 'application/json';
-
-      const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': contentType },
-        body: body,
-      });
-
-      const text = await response.text();
-      return new Response(text, {
-        status: response.status,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-      });
-    } catch (err) {
-      console.error('Worker error:', err);
-      return new Response(
-        JSON.stringify({ error: 'Прокси: внутренняя ошибка' }),
-        {
-          status: 500,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    }
-  },
-};
+    const text = await googleRes.text();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.status(googleRes.status).send(text);
+  } catch (e) {
+    res.status(500).json({ error: 'Прокси: ошибка' });
+  }
+}
